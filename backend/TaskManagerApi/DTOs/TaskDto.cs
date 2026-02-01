@@ -1,4 +1,3 @@
-// DTOs/TaskDto.cs
 namespace TaskManagerApi.DTOs
 {
     public class TaskDto
@@ -17,15 +16,15 @@ namespace TaskManagerApi.DTOs
         public int? CreatedById { get; set; }
         public string? CreatedByName { get; set; }
         
-        // Dates
-        public DateTime DueDate { get; set; }
+        // Dates - CHANGED BACK to non-nullable DateTime to match model
+        public DateTime DueDate { get; set; }  // Changed from DateTime? to DateTime
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
         
-        // Time tracking
-        public int? EstimatedHours { get; set; }
-        public int? ActualHours { get; set; }
+        // Time tracking - CHANGED BACK to int? to match model
+        public int? EstimatedHours { get; set; }  // Changed from decimal? to int?
+        public int? ActualHours { get; set; }     // Changed from decimal? to int?
     }
     
     public class CreateTaskDto
@@ -36,7 +35,7 @@ namespace TaskManagerApi.DTOs
         public int? AssignedToId { get; set; }
         public DateTime DueDate { get; set; }
         public string? Category { get; set; }
-        public int? EstimatedHours { get; set; }
+        public int? EstimatedHours { get; set; }  // Changed from decimal? to int?
     }
     
     public class UpdateTaskDto
@@ -48,7 +47,7 @@ namespace TaskManagerApi.DTOs
         public int? AssignedToId { get; set; }
         public DateTime? DueDate { get; set; }
         public string? Category { get; set; }
-        public int? EstimatedHours { get; set; }
-        public int? ActualHours { get; set; }
+        public int? EstimatedHours { get; set; }  // Changed from decimal? to int?
+        public int? ActualHours { get; set; }     // Changed from decimal? to int?
     }
 }

@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // For Vite: use import.meta.env.VITE_API_URL
 // For Create React App: use process.env.REACT_APP_API_URL
-const API_URL = import.meta.env.VITE_API_URL || 'https://localhost:5001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5136/api';
 
 const API = axios.create({
     baseURL: API_URL,
@@ -31,6 +31,7 @@ API.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            localStorage.removeItem('permissions');
             window.location.href = '/login';
         }
         return Promise.reject(error);
@@ -65,13 +66,19 @@ export const taskAPI = {
     getStats: () => API.get('/tasks/stats')
 };
 
-// Role services
+// Role services - SINGLE DEFINITION
 export const roleAPI = {
     getAll: () => API.get('/roles'),
     getById: (id) => API.get(`/roles/${id}`),
-    create: (role) => API.post('/roles', role),
-    update: (id, role) => API.put(`/roles/${id}`, role),
-    delete: (id) => API.delete(`/roles/${id}`)
+    create: (roleData) => API.post('/roles', roleData),
+    update: (id, roleData) => API.put(`/roles/${id}`, roleData),
+    delete: (id) => API.delete(`/roles/${id}`),
+    getRolePermissions: (roleId) => API.get(`/roles/${roleId}/permissions`),
+    updateRolePermissions: (roleId, permissions) => 
+        API.put(`/roles/${roleId}/permissions`, permissions)
 };
+
+
+
 
 export default API;

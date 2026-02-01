@@ -1,4 +1,3 @@
-// Controllers/TasksController.cs
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +16,17 @@ public class TasksController : ControllerBase
     public TasksController(AppDbContext context)
     {
         _context = context;
+    }
+
+    // Helper method to ensure DateTime is UTC
+    private DateTime EnsureUtc(DateTime dateTime)
+    {
+        if (dateTime.Kind == DateTimeKind.Utc)
+            return dateTime;
+        if (dateTime.Kind == DateTimeKind.Local)
+            return dateTime.ToUniversalTime();
+        // If Unspecified, assume it's UTC
+        return DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
     }
 
     // GET: api/tasks
@@ -189,7 +199,8 @@ public class TasksController : ControllerBase
                 Priority = dto.Priority,
                 AssignedToId = dto.AssignedToId,
                 CreatedById = currentUserId,
-                DueDate = dto.DueDate,
+                // FIX: Ensure DueDate is UTC
+                DueDate = EnsureUtc(dto.DueDate),
                 Category = dto.Category,
                 EstimatedHours = dto.EstimatedHours,
                 CreatedAt = DateTime.UtcNow
@@ -278,7 +289,10 @@ public class TasksController : ControllerBase
             }
 
             if (dto.DueDate.HasValue)
-                task.DueDate = dto.DueDate.Value;
+            {
+                // FIX: Ensure DueDate is UTC
+                task.DueDate = EnsureUtc(dto.DueDate.Value);
+            }
 
             if (dto.Category != null)
                 task.Category = dto.Category;

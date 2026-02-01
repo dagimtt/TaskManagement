@@ -6,6 +6,7 @@ C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.Assembl
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.csproj.CoreCompileInputs.cache
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.MvcApplicationPartsAssemblyInfo.cs
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.MvcApplicationPartsAssemblyInfo.cache
+C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.sourcelink.json
 C:\Projects\Task\backend\TaskManagerApi\bin\Debug\net10.0\appsettings.Development.json
 C:\Projects\Task\backend\TaskManagerApi\bin\Debug\net10.0\appsettings.json
 C:\Projects\Task\backend\TaskManagerApi\bin\Debug\net10.0\TaskManagerApi.staticwebassets.endpoints.json
@@ -162,4 +163,3 @@ C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\refint\TaskManagerApi.
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.pdb
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.genruntimeconfig.cache
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\ref\TaskManagerApi.dll
-C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.sourcelink.json

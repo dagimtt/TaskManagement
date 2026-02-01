@@ -18,6 +18,79 @@ public class UsersController : ControllerBase
         _context = context;
     }
 
+    // POST: api/users
+    [HttpPost]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> CreateUser([FromBody] RegisterDto dto)
+    {
+        try
+        {
+            // Validate input
+            if (string.IsNullOrWhiteSpace(dto.FullName))
+                return BadRequest(new { message = "Full name is required" });
+            
+            if (string.IsNullOrWhiteSpace(dto.Username))
+                return BadRequest(new { message = "Username is required" });
+            
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                return BadRequest(new { message = "Email is required" });
+            
+            if (string.IsNullOrWhiteSpace(dto.Password))
+                return BadRequest(new { message = "Password is required" });
+
+            // Check if username already exists
+            if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
+                return BadRequest(new { message = "Username already exists" });
+
+            // Check if email already exists
+            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+                return BadRequest(new { message = "Email already exists" });
+
+            // Get role (default to User role if not specified)
+            var roleId = dto.RoleId > 0 ? dto.RoleId : 3; // Default to User role (ID 3)
+            
+            var role = await _context.Roles.FindAsync(roleId);
+            if (role == null)
+                return BadRequest(new { message = "Invalid role specified" });
+
+            // Create new user
+            var user = new User
+            {
+                FullName = dto.FullName,
+                Username = dto.Username,
+                Email = dto.Email,
+                PasswordHash = dto.Password, // TODO: Hash password using BCrypt
+                RoleId = roleId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            // Return created user info
+            return Ok(new
+            {
+                message = "User created successfully",
+                user = new UserDto
+                {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    Username = user.Username,
+                    Email = user.Email,
+                    Role = role.Name,
+                    RoleId = role.Id,
+                    CreatedAt = user.CreatedAt,
+                    IsActive = user.IsActive
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "User creation failed", error = ex.Message });
+        }
+    }
+
     // GET: api/users
     [HttpGet]
     [Authorize(Roles = "Admin,Manager")]

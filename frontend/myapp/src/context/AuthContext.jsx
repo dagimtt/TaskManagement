@@ -1,11 +1,8 @@
-// src/context/AuthContext.jsx
 import { createContext, useState, useContext, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, roleAPI } from '../services/api';
 
-// Create context
 const AuthContext = createContext();
 
-// Create custom hook
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
@@ -14,45 +11,96 @@ export const useAuth = () => {
     return context;
 };
 
-// Create provider component
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [userPermissions, setUserPermissions] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         const savedUser = localStorage.getItem('user');
+        const savedPermissions = localStorage.getItem('permissions');
         
         if (token && savedUser) {
             try {
-                setUser(JSON.parse(savedUser));
+                const parsedUser = JSON.parse(savedUser);
+                setUser(parsedUser);
+                
+                if (savedPermissions) {
+                    setUserPermissions(JSON.parse(savedPermissions));
+                } else if (parsedUser.roleId) {
+                    fetchUserPermissions(parsedUser.roleId);
+                }
             } catch (err) {
                 console.error('Error parsing user data:', err);
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+                clearAuthData();
             }
         }
         setLoading(false);
     }, []);
 
-    // Add hasPermission function here
-    const hasPermission = (permission) => {
-        if (!user || !user.role) return false;
+    const fetchUserPermissions = async (roleId) => {
+        try {
+            const response = await roleAPI.getRolePermissions(roleId);
+            setUserPermissions(response.data);
+            localStorage.setItem('permissions', JSON.stringify(response.data));
+        } catch (error) {
+            console.error('Error fetching permissions:', error);
+        }
+    };
+
+    const clearAuthData = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('permissions');
+        setUser(null);
+        setUserPermissions(null);
+    };
+
+    // Dynamic permission checking with your 14 permissions
+    const hasPermission = (permissionKey) => {
+        if (!userPermissions) return false;
         
+        // Map frontend permission keys to backend property names
         const permissionMap = {
-            'TASK_ASSIGN': ['Admin', 'Manager', 'User'],
-            'USER_VIEW': ['Admin', 'Manager'],
-            'USER_CREATE': ['Admin', 'Manager'],
-            'ROLE_MANAGE': ['Admin'],
-            'PERMISSION_MANAGE': ['Admin']
+            // Task permissions
+            'TASK_VIEW_ALL': 'canViewAllTasks',
+            'TASK_EDIT_ALL': 'canEditAllTasks',
+            'TASK_CREATE': 'canCreateTasks',
+            'TASK_DELETE': 'canDeleteTasks',
+            'TASK_ASSIGN': 'canAssignTasks',
+            
+            // User permissions
+            'USER_VIEW_ALL': 'canViewAllUsers',
+            'USER_CREATE': 'canCreateUsers',
+            'USER_EDIT': 'canEditUsers',
+            'USER_DELETE': 'canDeleteUsers',
+            
+            // System permissions
+            'ROLE_MANAGE': 'canManageRoles',
+            'PERMISSION_MANAGE': 'canManagePermissions',
+            'REPORT_VIEW': 'canViewReports',
+            'DATA_EXPORT': 'canExportData'
         };
 
-        if (permissionMap[permission]) {
-            return permissionMap[permission].includes(user.role);
+        const backendProperty = permissionMap[permissionKey];
+        if (!backendProperty) {
+            console.warn(`Unknown permission key: ${permissionKey}`);
+            return false;
         }
         
-        return false;
+        return userPermissions[backendProperty] === true;
+    };
+
+    // Check if user has any of the given permissions
+    const hasAnyPermission = (permissionKeys) => {
+        return permissionKeys.some(key => hasPermission(key));
+    };
+
+    // Check if user has all of the given permissions
+    const hasAllPermissions = (permissionKeys) => {
+        return permissionKeys.every(key => hasPermission(key));
     };
 
     const login = async (credentials) => {
@@ -65,6 +113,11 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('user', JSON.stringify(user));
             setUser(user);
             
+            // Fetch permissions for the user's role
+            if (user.roleId) {
+                await fetchUserPermissions(user.roleId);
+            }
+            
             return { success: true };
         } catch (error) {
             const errorMessage = error.response?.data?.message || 'Login failed';
@@ -74,45 +127,27 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
+        clearAuthData();
         window.location.href = '/login';
     };
 
-    const register = async (userData) => {
-        try {
-            setError('');
-            const response = await authAPI.register(userData);
-            return { success: true, data: response.data };
-        } catch (error) {
-            const errorMessage = error.response?.data?.message || 'Registration failed';
-            setError(errorMessage);
-            return { success: false, error: errorMessage };
-        }
-    };
-
-    const changePassword = async (data) => {
-        try {
-            setError('');
-            await authAPI.changePassword(data);
-            return { success: true };
-        } catch (error) {
-            const errorMessage = error.response?.data?.message || 'Password change failed';
-            setError(errorMessage);
-            return { success: false, error: errorMessage };
+    const refreshPermissions = async () => {
+        if (user?.roleId) {
+            await fetchUserPermissions(user.roleId);
         }
     };
 
     const value = {
         user,
+        userPermissions,
         loading,
         error,
         login,
         logout,
-        register,
-        changePassword,
         hasPermission,
+        hasAnyPermission,
+        hasAllPermissions,
+        refreshPermissions,
         setError
     };
 
@@ -122,6 +157,3 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
-
-// Also export the context itself if needed elsewhere
-export default AuthContext;

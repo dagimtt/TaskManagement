@@ -213,7 +213,7 @@ export default function AddTask() {
                 <div className="pt-4">
                     <button
                         type="submit"
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-blue-400"
+                        className="bg-[#073954] text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-blue-400"
                         disabled={loading}
                     >
                         {loading ? 'Creating Task...' : 'Save Task'}
