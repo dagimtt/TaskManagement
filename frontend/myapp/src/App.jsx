@@ -29,9 +29,9 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
-            <Route path="tasks/add" element={<AddTask />} />
+            <Route path="add-task" element={<AddTask />} />
             <Route path="users" element={<Users />} />
-            <Route path="users/add" element={<AddUser />} />
+            <Route path="add-user" element={<AddUser />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
           </Route>

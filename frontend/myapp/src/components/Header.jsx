@@ -13,11 +13,9 @@ export default function Header() {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-xl font-semibold text-gray-800">
-                        Task Manager
                     </h1>
                     {user && (
                         <p className="text-sm text-gray-500">
-                            Welcome, {user.fullName || user.username}!
                         </p>
                     )}
                 </div>

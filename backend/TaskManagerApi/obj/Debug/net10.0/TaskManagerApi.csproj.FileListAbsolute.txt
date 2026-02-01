@@ -162,3 +162,4 @@ C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\refint\TaskManagerApi.
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.pdb
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.genruntimeconfig.cache
 C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\ref\TaskManagerApi.dll
+C:\Projects\Task\backend\TaskManagerApi\obj\Debug\net10.0\TaskManagerApi.sourcelink.json
