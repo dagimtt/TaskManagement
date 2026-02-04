@@ -148,7 +148,7 @@ public class UsersController : ControllerBase
 
             var user = await _context.Users
                 .Include(u => u.Role)
-                .Include(u => u.Tasks.Where(t => !t.IsDeleted))
+                .Include(u => u.AssignedTasks.Where(t => !t.IsDeleted)) // UPDATED: Changed from Tasks to AssignedTasks
                 .FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
 
             if (user == null)
@@ -165,7 +165,7 @@ public class UsersController : ControllerBase
                 RoleId = user.RoleId,
                 CreatedAt = user.CreatedAt,
                 IsActive = user.IsActive,
-                Tasks = user.Tasks?.Select(t => new
+                Tasks = user.AssignedTasks?.Select(t => new // UPDATED: Changed from Tasks to AssignedTasks
                 {
                     Id = t.Id,
                     Title = t.Title,
@@ -269,13 +269,16 @@ public class UsersController : ControllerBase
             if (currentUserId == id)
                 return BadRequest(new { message = "Cannot delete your own account" });
 
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.AssignedTasks) // ADDED: Include assigned tasks
+                .FirstOrDefaultAsync(u => u.Id == id);
+            
             if (user == null)
                 return NotFound(new { message = "User not found" });
 
-            // Check if user has any active tasks
-            var hasActiveTasks = await _context.Tasks
-                .AnyAsync(t => t.AssignedToId == id && !t.IsDeleted && t.Status != "Completed");
+            // Check if user has any active tasks - UPDATED FOR MANY-TO-MANY
+            var hasActiveTasks = user.AssignedTasks
+                .Any(t => !t.IsDeleted && t.Status != "Completed");
 
             if (hasActiveTasks)
                 return BadRequest(new { message = "User has active tasks. Reassign or complete them first." });
@@ -315,17 +318,17 @@ public class UsersController : ControllerBase
             // Users with most tasks
             var topUsers = await _context.Users
                 .Include(u => u.Role)
-                .Include(u => u.Tasks.Where(t => !t.IsDeleted))
+                .Include(u => u.AssignedTasks.Where(t => !t.IsDeleted)) // UPDATED: Changed from Tasks to AssignedTasks
                 .Where(u => u.IsActive)
-                .OrderByDescending(u => u.Tasks.Count)
+                .OrderByDescending(u => u.AssignedTasks.Count) // UPDATED: Changed from Tasks to AssignedTasks
                 .Take(5)
                 .Select(u => new
                 {
                     u.Id,
                     u.FullName,
                     u.Role.Name,
-                    TaskCount = u.Tasks.Count,
-                    CompletedTasks = u.Tasks.Count(t => t.Status == "Completed")
+                    TaskCount = u.AssignedTasks.Count, // UPDATED: Changed from Tasks to AssignedTasks
+                    CompletedTasks = u.AssignedTasks.Count(t => t.Status == "Completed") // UPDATED: Changed from Tasks to AssignedTasks
                 })
                 .ToListAsync();
 

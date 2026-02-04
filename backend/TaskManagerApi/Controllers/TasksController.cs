@@ -12,10 +12,12 @@ using TaskManagerApi.Models;
 public class TasksController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<TasksController> _logger;
 
-    public TasksController(AppDbContext context)
+    public TasksController(AppDbContext context, ILogger<TasksController> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     // Helper method to ensure DateTime is UTC
@@ -44,17 +46,21 @@ public class TasksController : ControllerBase
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
             var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-            // Start building query
+            // FIXED: Add .ThenInclude for Role
             var query = _context.Tasks
-                .Include(t => t.AssignedTo)
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role) // ← CRITICAL FIX
                 .Include(t => t.CreatedBy)
+                    .ThenInclude(u => u.Role) // ← CRITICAL FIX
                 .Where(t => !t.IsDeleted);
 
             // Apply role-based filtering
             if (currentUserRole != "Admin" && currentUserRole != "Manager")
             {
                 // Regular users can only see tasks assigned to them or created by them
-                query = query.Where(t => t.AssignedToId == currentUserId || t.CreatedById == currentUserId);
+                query = query.Where(t => 
+                    t.AssignedUsers.Any(u => u.Id == currentUserId) || 
+                    t.CreatedById == currentUserId);
             }
 
             // Apply filters
@@ -65,13 +71,13 @@ public class TasksController : ControllerBase
                 query = query.Where(t => t.Priority == priority);
 
             if (assignedTo.HasValue)
-                query = query.Where(t => t.AssignedToId == assignedTo);
+                query = query.Where(t => t.AssignedUsers.Any(u => u.Id == assignedTo.Value));
 
             if (!string.IsNullOrEmpty(search))
                 query = query.Where(t => 
                     t.Title.Contains(search) || 
-                    t.Description.Contains(search) ||
-                    t.Category.Contains(search));
+                    (t.Description != null && t.Description.Contains(search)) ||
+                    (t.Category != null && t.Category.Contains(search)));
 
             // Apply sorting
             query = sortBy.ToLower() switch
@@ -92,7 +98,7 @@ public class TasksController : ControllerBase
 
             var tasks = await query.ToListAsync();
 
-            // Map to DTO
+            // Map to DTO with null checks
             var taskDtos = tasks.Select(t => new TaskDto
             {
                 Id = t.Id,
@@ -101,10 +107,17 @@ public class TasksController : ControllerBase
                 Status = t.Status,
                 Priority = t.Priority,
                 Category = t.Category,
-                AssignedToId = t.AssignedToId,
-                AssignedToName = t.AssignedTo?.FullName,
+                // FIXED: Added null checks
+                AssignedUsers = t.AssignedUsers?.Select(u => new UserSimpleDto
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role?.Name ?? "No Role" // Null check
+                }).ToList() ?? new List<UserSimpleDto>(),
                 CreatedById = t.CreatedById,
-                CreatedByName = t.CreatedBy?.FullName,
+                CreatedByName = t.CreatedBy?.FullName ?? "Unknown",
                 DueDate = t.DueDate,
                 CreatedAt = t.CreatedAt,
                 UpdatedAt = t.UpdatedAt,
@@ -117,7 +130,12 @@ public class TasksController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving tasks", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving tasks");
+            return StatusCode(500, new { 
+                message = "Error retrieving tasks", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -127,9 +145,12 @@ public class TasksController : ControllerBase
     {
         try
         {
+            // FIXED: Add .ThenInclude for Role
             var task = await _context.Tasks
-                .Include(t => t.AssignedTo)
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role) // ← CRITICAL FIX
                 .Include(t => t.CreatedBy)
+                    .ThenInclude(u => u.Role) // ← CRITICAL FIX
                 .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
 
             if (task == null)
@@ -140,7 +161,8 @@ public class TasksController : ControllerBase
             var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             if (currentUserRole != "Admin" && currentUserRole != "Manager" &&
-                task.AssignedToId != currentUserId && task.CreatedById != currentUserId)
+                !task.AssignedUsers.Any(u => u.Id == currentUserId) && 
+                task.CreatedById != currentUserId)
                 return Forbid();
 
             var taskDto = new TaskDto
@@ -151,10 +173,17 @@ public class TasksController : ControllerBase
                 Status = task.Status,
                 Priority = task.Priority,
                 Category = task.Category,
-                AssignedToId = task.AssignedToId,
-                AssignedToName = task.AssignedTo?.FullName,
+                // FIXED: Added null checks
+                AssignedUsers = task.AssignedUsers?.Select(u => new UserSimpleDto
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role?.Name ?? "No Role" // Null check
+                }).ToList() ?? new List<UserSimpleDto>(),
                 CreatedById = task.CreatedById,
-                CreatedByName = task.CreatedBy?.FullName,
+                CreatedByName = task.CreatedBy?.FullName ?? "Unknown",
                 DueDate = task.DueDate,
                 CreatedAt = task.CreatedAt,
                 UpdatedAt = task.UpdatedAt,
@@ -167,7 +196,12 @@ public class TasksController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving task", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving task with ID: {TaskId}", id);
+            return StatusCode(500, new { 
+                message = "Error retrieving task", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -183,12 +217,17 @@ public class TasksController : ControllerBase
 
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
-            // Check if assigned user exists
-            if (dto.AssignedToId.HasValue)
+            // Check if assigned users exist
+            var assignedUsers = new List<User>();
+            if (dto.AssignedUserIds != null && dto.AssignedUserIds.Any())
             {
-                var assignedUser = await _context.Users.FindAsync(dto.AssignedToId.Value);
-                if (assignedUser == null || !assignedUser.IsActive)
-                    return BadRequest(new { message = "Assigned user not found or inactive" });
+                assignedUsers = await _context.Users
+                    .Include(u => u.Role) // Include Role
+                    .Where(u => dto.AssignedUserIds.Contains(u.Id) && u.IsActive)
+                    .ToListAsync();
+
+                if (assignedUsers.Count != dto.AssignedUserIds.Count)
+                    return BadRequest(new { message = "One or more assigned users not found or inactive" });
             }
 
             var task = new TaskItem
@@ -197,13 +236,13 @@ public class TasksController : ControllerBase
                 Description = dto.Description,
                 Status = "Pending",
                 Priority = dto.Priority,
-                AssignedToId = dto.AssignedToId,
                 CreatedById = currentUserId,
                 // FIX: Ensure DueDate is UTC
                 DueDate = EnsureUtc(dto.DueDate),
                 Category = dto.Category,
                 EstimatedHours = dto.EstimatedHours,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                AssignedUsers = assignedUsers  // Assign multiple users
             };
 
             _context.Tasks.Add(task);
@@ -211,8 +250,10 @@ public class TasksController : ControllerBase
 
             // Get the created task with relations
             var createdTask = await _context.Tasks
-                .Include(t => t.AssignedTo)
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role)
                 .Include(t => t.CreatedBy)
+                    .ThenInclude(u => u.Role) // ← ADDED THIS
                 .FirstOrDefaultAsync(t => t.Id == task.Id);
 
             var taskDto = new TaskDto
@@ -223,10 +264,17 @@ public class TasksController : ControllerBase
                 Status = createdTask.Status,
                 Priority = createdTask.Priority,
                 Category = createdTask.Category,
-                AssignedToId = createdTask.AssignedToId,
-                AssignedToName = createdTask.AssignedTo?.FullName,
+                // Updated for multiple users
+                AssignedUsers = createdTask.AssignedUsers.Select(u => new UserSimpleDto
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role?.Name ?? "No Role" // Null check
+                }).ToList(),
                 CreatedById = createdTask.CreatedById,
-                CreatedByName = createdTask.CreatedBy?.FullName,
+                CreatedByName = createdTask.CreatedBy?.FullName ?? "Unknown",
                 DueDate = createdTask.DueDate,
                 CreatedAt = createdTask.CreatedAt,
                 EstimatedHours = createdTask.EstimatedHours
@@ -236,7 +284,12 @@ public class TasksController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error creating task", error = ex.Message });
+            _logger.LogError(ex, "Error creating task");
+            return StatusCode(500, new { 
+                message = "Error creating task", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -246,8 +299,13 @@ public class TasksController : ControllerBase
     {
         try
         {
-            var task = await _context.Tasks.FindAsync(id);
-            if (task == null || task.IsDeleted)
+            // FIXED: Add .ThenInclude for Role
+            var task = await _context.Tasks
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role) // ← CRITICAL FIX
+                .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
+                
+            if (task == null)
                 return NotFound(new { message = "Task not found" });
 
             // Check permissions
@@ -280,12 +338,28 @@ public class TasksController : ControllerBase
             if (!string.IsNullOrWhiteSpace(dto.Priority))
                 task.Priority = dto.Priority;
 
-            if (dto.AssignedToId.HasValue)
+            // Update assigned users if provided
+            if (dto.AssignedUserIds != null)
             {
-                var assignedUser = await _context.Users.FindAsync(dto.AssignedToId.Value);
-                if (assignedUser == null || !assignedUser.IsActive)
-                    return BadRequest(new { message = "Assigned user not found or inactive" });
-                task.AssignedToId = dto.AssignedToId.Value;
+                // Clear existing assigned users
+                task.AssignedUsers.Clear();
+                
+                // Add new assigned users
+                if (dto.AssignedUserIds.Any())
+                {
+                    var assignedUsers = await _context.Users
+                        .Include(u => u.Role) // Include Role
+                        .Where(u => dto.AssignedUserIds.Contains(u.Id) && u.IsActive)
+                        .ToListAsync();
+
+                    if (assignedUsers.Count != dto.AssignedUserIds.Count)
+                        return BadRequest(new { message = "One or more assigned users not found or inactive" });
+
+                    foreach (var user in assignedUsers)
+                    {
+                        task.AssignedUsers.Add(user);
+                    }
+                }
             }
 
             if (dto.DueDate.HasValue)
@@ -309,8 +383,10 @@ public class TasksController : ControllerBase
 
             // Get updated task with relations
             var updatedTask = await _context.Tasks
-                .Include(t => t.AssignedTo)
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role)
                 .Include(t => t.CreatedBy)
+                    .ThenInclude(u => u.Role) // ← ADDED THIS
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             var taskDto = new TaskDto
@@ -321,10 +397,17 @@ public class TasksController : ControllerBase
                 Status = updatedTask.Status,
                 Priority = updatedTask.Priority,
                 Category = updatedTask.Category,
-                AssignedToId = updatedTask.AssignedToId,
-                AssignedToName = updatedTask.AssignedTo?.FullName,
+                // Updated for multiple users
+                AssignedUsers = updatedTask.AssignedUsers.Select(u => new UserSimpleDto
+                {
+                    Id = u.Id,
+                    FullName = u.FullName,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role?.Name ?? "No Role" // Null check
+                }).ToList(),
                 CreatedById = updatedTask.CreatedById,
-                CreatedByName = updatedTask.CreatedBy?.FullName,
+                CreatedByName = updatedTask.CreatedBy?.FullName ?? "Unknown",
                 DueDate = updatedTask.DueDate,
                 CreatedAt = updatedTask.CreatedAt,
                 UpdatedAt = updatedTask.UpdatedAt,
@@ -337,7 +420,12 @@ public class TasksController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error updating task", error = ex.Message });
+            _logger.LogError(ex, "Error updating task with ID: {TaskId}", id);
+            return StatusCode(500, new { 
+                message = "Error updating task", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -372,7 +460,12 @@ public class TasksController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error deleting task", error = ex.Message });
+            _logger.LogError(ex, "Error deleting task with ID: {TaskId}", id);
+            return StatusCode(500, new { 
+                message = "Error deleting task", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -385,12 +478,17 @@ public class TasksController : ControllerBase
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
             var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-            IQueryable<TaskItem> query = _context.Tasks.Where(t => !t.IsDeleted);
+            IQueryable<TaskItem> query = _context.Tasks
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role) // ← ADDED THIS
+                .Where(t => !t.IsDeleted);
 
             // Apply role-based filtering
             if (currentUserRole != "Admin" && currentUserRole != "Manager")
             {
-                query = query.Where(t => t.AssignedToId == currentUserId || t.CreatedById == currentUserId);
+                query = query.Where(t => 
+                    t.AssignedUsers.Any(u => u.Id == currentUserId) || 
+                    t.CreatedById == currentUserId);
             }
 
             var totalTasks = await query.CountAsync();
@@ -405,6 +503,25 @@ public class TasksController : ControllerBase
             var overdueTasks = await query.CountAsync(t => 
                 t.Status != "Completed" && t.DueDate < DateTime.UtcNow);
 
+            // Get user tasks data for chart
+            var userTasksData = await _context.Users
+                .Include(u => u.AssignedTasks)
+                .Include(u => u.Role) // Include Role
+                .Where(u => u.IsActive)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.FullName,
+                    u.Username,
+                    TaskCount = u.AssignedTasks.Count(t => !t.IsDeleted),
+                    CompletedTasks = u.AssignedTasks.Count(t => !t.IsDeleted && t.Status == "Completed"),
+                    PendingTasks = u.AssignedTasks.Count(t => !t.IsDeleted && t.Status != "Completed")
+                })
+                .Where(u => u.TaskCount > 0)
+                .OrderByDescending(u => u.TaskCount)
+                .Take(10) // Limit to top 10 users
+                .ToListAsync();
+
             return Ok(new
             {
                 totalTasks,
@@ -415,12 +532,64 @@ public class TasksController : ControllerBase
                 mediumPriorityTasks,
                 lowPriorityTasks,
                 overdueTasks,
-                completionRate = totalTasks > 0 ? (double)completedTasks / totalTasks * 100 : 0
+                completionRate = totalTasks > 0 ? (double)completedTasks / totalTasks * 100 : 0,
+                userTasksData // Add this for the dashboard chart
             });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error getting task statistics", error = ex.Message });
+            _logger.LogError(ex, "Error getting task statistics");
+            return StatusCode(500, new { 
+                message = "Error getting task statistics", 
+                error = ex.Message,
+                stackTrace = ex.StackTrace 
+            });
+        }
+    }
+
+    // TEST ENDPOINT - For debugging only
+    [HttpGet("test/debug")]
+    public async Task<IActionResult> DebugTest()
+    {
+        try
+        {
+            // Test 1: Simple count
+            var totalTasks = await _context.Tasks.CountAsync();
+            
+            // Test 2: Check if Role table has data
+            var roles = await _context.Roles.ToListAsync();
+            
+            // Test 3: Try a simple query with includes
+            var testTask = await _context.Tasks
+                .Include(t => t.AssignedUsers)
+                    .ThenInclude(u => u.Role)
+                .Include(t => t.CreatedBy)
+                    .ThenInclude(u => u.Role)
+                .FirstOrDefaultAsync(t => t.Id == 1);
+            
+            return Ok(new
+            {
+                totalTasks,
+                roleCount = roles.Count,
+                testTask = testTask != null ? new
+                {
+                    testTask.Id,
+                    testTask.Title,
+                    HasAssignedUsers = testTask.AssignedUsers?.Count ?? 0,
+                    FirstUserRole = testTask.AssignedUsers?.FirstOrDefault()?.Role?.Name
+                } : null,
+                message = "Debug endpoint working"
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Debug test failed",
+                error = ex.Message,
+                innerError = ex.InnerException?.Message,
+                stackTrace = ex.StackTrace
+            });
         }
     }
 }

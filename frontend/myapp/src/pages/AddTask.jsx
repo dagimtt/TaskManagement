@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { taskAPI, userAPI } from '../services/api';
+import { X, UserPlus } from 'lucide-react';
 
 export default function AddTask() {
     const [form, setForm] = useState({
@@ -10,9 +11,10 @@ export default function AddTask() {
         dueDate: '',
         category: '',
         estimatedHours: '',
-        assignedToId: ''
+        assignedUserIds: []  // Changed from assignedToId to array
     });
     const [users, setUsers] = useState([]);
+    const [selectedUsers, setSelectedUsers] = useState([]); // For display
     const [loading, setLoading] = useState(false);
     const [userLoading, setUserLoading] = useState(true);
     const [error, setError] = useState('');
@@ -61,7 +63,7 @@ export default function AddTask() {
                 dueDate: form.dueDate,
                 category: form.category || null,
                 estimatedHours: form.estimatedHours ? parseInt(form.estimatedHours) : null,
-                assignedToId: form.assignedToId ? parseInt(form.assignedToId) : null
+                assignedUserIds: form.assignedUserIds // Send array instead of single ID
             };
 
             await taskAPI.create(taskData);
@@ -74,8 +76,9 @@ export default function AddTask() {
                 dueDate: '',
                 category: '',
                 estimatedHours: '',
-                assignedToId: ''
+                assignedUserIds: []
             });
+            setSelectedUsers([]);
 
             // Redirect after 2 seconds
             setTimeout(() => {
@@ -89,7 +92,35 @@ export default function AddTask() {
         }
     };
 
+    const handleUserSelect = (e) => {
+        const userId = parseInt(e.target.value);
+        if (userId && !form.assignedUserIds.includes(userId)) {
+            const user = users.find(u => u.id === userId);
+            if (user) {
+                setForm(prev => ({
+                    ...prev,
+                    assignedUserIds: [...prev.assignedUserIds, userId]
+                }));
+                setSelectedUsers(prev => [...prev, user]);
+                e.target.value = ''; // Reset select
+            }
+        }
+    };
+
+    const handleRemoveUser = (userId) => {
+        setForm(prev => ({
+            ...prev,
+            assignedUserIds: prev.assignedUserIds.filter(id => id !== userId)
+        }));
+        setSelectedUsers(prev => prev.filter(user => user.id !== userId));
+    };
+
     const today = new Date().toISOString().split('T')[0];
+
+    // Get available users (not already selected)
+    const availableUsers = users.filter(user => 
+        !form.assignedUserIds.includes(user.id)
+    );
 
     return (
         <div className="bg-white p-6 rounded-xl shadow max-w-xl mx-auto">
@@ -183,29 +214,70 @@ export default function AddTask() {
                     disabled={loading}
                 />
 
-                {/* Assign To */}
+                {/* Assign To Multiple Users */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Assign To (optional)
+                        <span className="text-xs text-gray-500 ml-2">
+                            {form.assignedUserIds.length > 0 
+                                ? `${form.assignedUserIds.length} user(s) selected` 
+                                : 'Select users'}
+                        </span>
                     </label>
+
+                    {/* Selected Users Display */}
+                    {selectedUsers.length > 0 && (
+                        <div className="mb-3 p-3 bg-gray-50 rounded-lg border">
+                            <div className="flex flex-wrap gap-2">
+                                {selectedUsers.map(user => (
+                                    <div 
+                                        key={user.id}
+                                        className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 text-sm"
+                                    >
+                                        <span className="font-medium">
+                                            {user.fullName}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveUser(user.id)}
+                                            className="text-gray-400 hover:text-red-500"
+                                            disabled={loading}
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* User Selection */}
                     {userLoading ? (
                         <div className="border rounded-lg px-4 py-2 text-gray-500">
                             Loading users...
                         </div>
                     ) : (
-                        <select
-                            className="w-full border rounded-lg px-4 py-2"
-                            value={form.assignedToId}
-                            onChange={(e) => setForm({...form, assignedToId: e.target.value})}
-                            disabled={loading}
-                        >
-                            <option value="">Unassigned</option>
-                            {users.map(user => (
-                                <option key={user.id} value={user.id}>
-                                    {user.fullName} ({user.role})
-                                </option>
-                            ))}
-                        </select>
+                        <div className="flex items-center gap-2">
+                            <UserPlus size={18} className="text-gray-400" />
+                            <select
+                                className="w-full border rounded-lg px-4 py-2"
+                                onChange={handleUserSelect}
+                                disabled={loading || availableUsers.length === 0}
+                            >
+                                <option value="">Select a user to assign...</option>
+                                {availableUsers.map(user => (
+                                    <option key={user.id} value={user.id}>
+                                        {user.fullName} ({user.role})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {availableUsers.length === 0 && form.assignedUserIds.length > 0 && (
+                        <p className="text-sm text-gray-500 mt-1">
+                            All available users have been assigned to this task.
+                        </p>
                     )}
                 </div>
 

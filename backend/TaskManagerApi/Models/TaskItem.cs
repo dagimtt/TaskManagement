@@ -1,4 +1,3 @@
-// Models/TaskItem.cs
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
@@ -23,11 +22,12 @@ namespace TaskManagerApi.Models
         [MaxLength(50)]
         public string Priority { get; set; } = "Medium";
         
-        public int? AssignedToId { get; set; }
+        // CORRECT: Many-to-many relationship
+        public ICollection<User> AssignedUsers { get; set; } = new List<User>();
         
-        [ForeignKey("AssignedToId")]
-        [JsonIgnore]
-        public User? AssignedTo { get; set; }
+        // WRONG: Remove these old properties if they exist
+        // public int? AssignedToId { get; set; }
+        // public User? AssignedTo { get; set; }
         
         public DateTime DueDate { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

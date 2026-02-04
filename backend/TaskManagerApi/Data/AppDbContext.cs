@@ -25,14 +25,29 @@ namespace TaskManagerApi.Data
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Task - User relationship (AssignedTo)
-            modelBuilder.Entity<TaskItem>()
-                .HasOne(t => t.AssignedTo)
-                .WithMany(u => u.Tasks)
-                .HasForeignKey(t => t.AssignedToId)
-                .OnDelete(DeleteBehavior.SetNull);
+            // REMOVE OLD: Task - User relationship (AssignedTo) - Single assignment
+            // modelBuilder.Entity<TaskItem>()
+            //     .HasOne(t => t.AssignedTo)
+            //     .WithMany(u => u.Tasks)
+            //     .HasForeignKey(t => t.AssignedToId)
+            //     .OnDelete(DeleteBehavior.SetNull);
 
-            // Task - User relationship (CreatedBy)
+            // ADD NEW: Task - User many-to-many relationship (AssignedUsers)
+            modelBuilder.Entity<TaskItem>()
+                .HasMany(t => t.AssignedUsers)
+                .WithMany(u => u.AssignedTasks)
+                .UsingEntity<Dictionary<string, object>>(
+                    "TaskUsers",
+                    j => j.HasOne<User>().WithMany().HasForeignKey("UserId"),
+                    j => j.HasOne<TaskItem>().WithMany().HasForeignKey("TaskId"),
+                    j =>
+                    {
+                        j.Property<DateTime>("AssignedAt")
+                            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        j.HasKey("TaskId", "UserId");
+                    });
+
+            // Task - User relationship (CreatedBy) - Keep this as single creator
             modelBuilder.Entity<TaskItem>()
                 .HasOne(t => t.CreatedBy)
                 .WithMany()
@@ -213,7 +228,7 @@ namespace TaskManagerApi.Data
                 }
             );
 
-            // Seed some sample tasks
+            // Seed some sample tasks - UPDATED for many-to-many
             modelBuilder.Entity<TaskItem>().HasData(
                 new TaskItem
                 {
@@ -222,7 +237,6 @@ namespace TaskManagerApi.Data
                     Description = "Initialize the project with proper folder structure",
                     Status = "Completed",
                     Priority = "High",
-                    AssignedToId = 1,
                     CreatedById = 1,
                     DueDate = baseDate.AddDays(30),
                     CreatedAt = baseDate,
@@ -235,7 +249,6 @@ namespace TaskManagerApi.Data
                     Description = "Add JWT authentication to the API",
                     Status = "In Progress",
                     Priority = "High",
-                    AssignedToId = 2,
                     CreatedById = 1,
                     DueDate = baseDate.AddDays(45),
                     CreatedAt = baseDate
@@ -247,7 +260,6 @@ namespace TaskManagerApi.Data
                     Description = "Build the main dashboard for task management",
                     Status = "Pending",
                     Priority = "Medium",
-                    AssignedToId = 3,
                     CreatedById = 1,
                     DueDate = baseDate.AddDays(60),
                     CreatedAt = baseDate
@@ -259,11 +271,51 @@ namespace TaskManagerApi.Data
                     Description = "Create and run database migrations",
                     Status = "Completed",
                     Priority = "High",
-                    AssignedToId = 4,
                     CreatedById = 2,
                     DueDate = baseDate.AddDays(15),
                     CreatedAt = baseDate,
                     CompletedAt = baseDate.AddDays(10)
+                }
+            );
+            
+            // Seed TaskUsers join table data for many-to-many relationships
+            modelBuilder.SharedTypeEntity<Dictionary<string, object>>("TaskUsers").HasData(
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 1,
+                    ["UserId"] = 1,
+                    ["AssignedAt"] = baseDate
+                },
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 2,
+                    ["UserId"] = 2,
+                    ["AssignedAt"] = baseDate
+                },
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 3,
+                    ["UserId"] = 3,
+                    ["AssignedAt"] = baseDate
+                },
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 4,
+                    ["UserId"] = 4,
+                    ["AssignedAt"] = baseDate
+                },
+                // Add multiple assignments to some tasks
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 1,
+                    ["UserId"] = 2, // Task 1 also assigned to user 2
+                    ["AssignedAt"] = baseDate.AddDays(1)
+                },
+                new Dictionary<string, object>
+                {
+                    ["TaskId"] = 2,
+                    ["UserId"] = 3, // Task 2 also assigned to user 3
+                    ["AssignedAt"] = baseDate.AddDays(1)
                 }
             );
         }
